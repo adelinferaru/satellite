@@ -23,16 +23,14 @@ We want you to create an application using Laravel framework that should be able
 
 **How to install and run:**
 
-1. Create a folder.
-2. Navigate inside that folder and run
-    > **composer require adelinferaru/satellite**
-3. Run command: 
+1. Download the repository and unzip.
+2. Navigate inside that folder and run command: 
     > **composer install**
-4. Run command: 
+3. Run command: 
     > **php artisan serve**
-5. You will se something like this: 
+4. You will se something like this: 
     > Laravel development server started: <http://127.0.0.1:8000>
-6. Open a browser and navigate to:  <http://127.0.0.1:8000>
+5. Open a browser and navigate to:  <http://127.0.0.1:8000>
 
  
 **TBD**
