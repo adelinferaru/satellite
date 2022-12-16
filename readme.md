@@ -49,7 +49,6 @@ We want you to create an application using Laravel framework that should be able
 Feraru Ioan Adelin
 
 `adelin.feraru@gmail.com`
-`|` `(+357) 99 272631`
 
 
 
