@@ -2,26 +2,18 @@
 
 namespace App\Providers;
 
+use App\Repositories\ISSContract;
+use App\Repositories\ISSGateway;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
 {
-    /**
-     * Bootstrap any application services.
-     *
-     * @return void
-     */
-    public function boot()
+    public function register(): void
     {
-        //
+        $this->app->singleton(ISSContract::class, ISSGateway::class);
     }
 
-    /**
-     * Register any application services.
-     *
-     * @return void
-     */
-    public function register()
+    public function boot(): void
     {
         //
     }

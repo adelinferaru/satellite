@@ -1,144 +1,77 @@
 <?php
-/**
- * Created by PhpStorm.
- * User: Ioan
- * Date: 09.01.2019
- * Time: 02:18
- */
 
 namespace App\Repositories;
 
-
-use GuzzleHttp\Client;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
+use Throwable;
 
 class ISSGateway implements ISSContract
 {
-    private $issApiScheme = 'https';
-    private $issApiHost = 'api.wheretheiss.at';
-    private $issApiVersion = 'v1';
+    private const DEFAULT_BASE = 'https://api.wheretheiss.at/v1/';
 
-    /**
-     * @var \GuzzleHttp\Client
-     */
-    protected $issClient;
-
-    /**
-     * @var string
-     */
-    protected $issApiBase;
-
-    /**
-     * ISSGateway constructor.
-     * @param $apiVersion
-     */
-    public function __construct($issApiVersion = null, $issApiScheme = null, $issApiHost = null)
-    {
-        if( $issApiVersion !== null) $this->issApiVersion = $issApiVersion;
-        if( $issApiScheme !== null) $this->issApiScheme = $issApiScheme;
-        if( $issApiHost !== null) $this->issApiHost = $issApiHost;
-
-        $this->issApiBase = $this->issApiScheme . '://' . $this->issApiHost . '/' . $this->issApiVersion . '/';
-
-        $this->issClient = new Client();
+    public function __construct(
+        private readonly string $baseUrl = self::DEFAULT_BASE,
+        private readonly int $timeoutSeconds = 5,
+    ) {
     }
 
-
-    /**
-     * Returns a list of satellites that this API has information about,
-     * inluding a common name and NORAD catalog id. Currently, there is only one,
-     * the International Space Station. But in the future, we plan to provide more.
-     *
-     * @return mixed
-     * @throws \GuzzleHttp\Exception\GuzzleException
-     */
-    public function getSatellites()
+    public function getSatellites(): array
     {
+        return $this->call('satellites');
+    }
 
+    public function getSatelliteId(int $id = 25544): array
+    {
+        // 1-second cache. wheretheiss.at rate-limits at 350 req / 5 minutes;
+        // a position fix is also only meaningful for ~1s anyway.
+        return Cache::remember(
+            "iss.satellite.{$id}",
+            now()->addSecond(),
+            fn () => $this->call("satellites/{$id}"),
+        );
+    }
+
+    public function getSatelliteIdPositions(int $id, array $timestamps = []): array
+    {
+        if ($timestamps === []) {
+            return $this->failure('At least one timestamp is required.');
+        }
+
+        return $this->call("satellites/{$id}/positions", [
+            'timestamps' => implode(',', $timestamps),
+        ]);
+    }
+
+    public function getCoordinates(float $lat, float $lon): array
+    {
+        return $this->call("coordinates/{$lat},{$lon}");
+    }
+
+    private function call(string $path, array $query = []): array
+    {
         try {
-            $response = $this->issClient->request('GET', $this->issApiBase . 'satellites');
+            $response = Http::baseUrl($this->baseUrl)
+                ->timeout($this->timeoutSeconds)
+                ->acceptJson()
+                ->get($path, $query)
+                ->throw();
 
             return [
                 'result' => 1,
-                'data' => json_decode($response->getBody()->getContents(), true)
+                'data' => $response->json(),
             ];
-
-        }
-        catch (\Exception $e) {
-            return [
-                'result' => 0,
-                'data' => null,
-                'message' => $e->getMessage()
-            ];
+        } catch (Throwable $e) {
+            return $this->failure($e->getMessage());
         }
     }
 
-    /**
-     * Returns position, velocity, and other related information about a satellite
-     * for a given point in time. [id] is required and should be the NORAD catalog id.
-     * For the ISS, that id is 25544.
-     *
-     * @param $id int
-     * @return mixed
-     * @throws \GuzzleHttp\Exception\GuzzleException
-     */
-    public function getSatelliteId($id = 25544)
+    private function failure(string $message): array
     {
-        try {
-            $response = $this->issClient->request('GET', $this->issApiBase . 'satellites/' . $id);
-
-            return [
-                'result' => 1,
-                'data' => json_decode($response->getBody()->getContents(), true)
-            ];
-
-        }
-        catch (\Exception $e) {
-            return [
-                'result' => 0,
-                'data' => null,
-                'message' => $e->getMessage()
-            ];
-        }
-    }
-
-    /**
-     * Returns a list in which each entry contains position, velocity,
-     * and other related information about a satellite for a comma delimited list of timestamps (up to 10).
-     * [id] is required and should be the NORAD catalog id. For the ISS, that id is 25544.
-     *
-     * @param $id int
-     * @param array $timestamps
-     * @return mixed
-     */
-    public function getSatelliteIdPositions($id, $timestamps = [])
-    {
-        // TODO: Implement getSatelliteIdPositions() method.
-    }
-
-    /**
-     * Returns position, current time offset, country code, and timezone id for a given set of coordinates in the format of latitude, longitude
-     *
-     * @param $lat float
-     * @param $lon float
-     * @return mixed
-     */
-    public function getCoordinates($lat, $lon)
-    {
-        try {
-            $response = $this->issClient->request('GET', $this->issApiBase . "coordinates/$lat,$lon");
-
-            return [
-                'result' => 1,
-                'data' => json_decode($response->getBody()->getContents(), true)
-            ];
-
-        }
-        catch (\Exception $e) {
-            return [
-                'result' => 0,
-                'data' => null,
-                'message' => $e->getMessage()
-            ];
-        }
+        return [
+            'result' => 0,
+            'data' => null,
+            'message' => $message,
+        ];
     }
 }
