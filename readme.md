@@ -1,30 +1,20 @@
-# ISS — Satellite
+# Satellite — ISS API
 
-A small Laravel API that wraps [api.wheretheiss.at](https://wheretheiss.at) to
-expose the current International Space Station position and compute the
-distance from any latitude/longitude to the ISS.
-
-## Tasks (original brief)
-
-1. Return the current position of the ISS (latitude/longitude).
-2. Compute an estimated distance between the current ISS location and a
-   given latitude/longitude, in km.
-3. Expose JSON API endpoints for the above.
+A Laravel 12 API that returns the current International Space Station position
+and computes the **slant-range distance** to it from any latitude/longitude.
+Wraps [api.wheretheiss.at](https://wheretheiss.at) with a 1-second response
+cache so repeated polls stay well inside the upstream rate limit.
 
 ## Stack
 
-- **Laravel 12** on **PHP 8.2+**.
-- Pure API — no frontend. Anything that wants a dashboard can build one
-  against the JSON endpoints.
-- Outbound HTTP via Laravel's `Http::` facade with a 1-second response
-  cache so repeated polls don't blow through wheretheiss.at's rate limit.
+- Laravel **12** on PHP **8.2+**.
+- Pure API — no frontend, no Node toolchain.
+- Outbound HTTP via Laravel's `Http::` facade; cached for 1 s per NORAD id.
 
 ## Requirements
 
 - PHP 8.3 recommended (8.2 minimum).
 - Composer 2.7+.
-
-No Node/npm required.
 
 ## Install & run
 
@@ -35,20 +25,56 @@ php artisan key:generate
 php artisan serve
 ```
 
-The dev server runs at `http://127.0.0.1:8000`. Health check at `/up`.
+Dev server at `http://127.0.0.1:8000`. Health check at `/up`.
 
-## API
+## Endpoints
 
 | Method | Path | Returns |
 |---|---|---|
-| `GET` | `/api/satellites` | List of satellites the upstream knows about (just the ISS today). |
-| `GET` | `/api/satellite/{id?}` | Position, velocity, altitude, timestamp for the satellite. Defaults to NORAD id 25544 (ISS). |
-| `GET` | `/api/coordinates/{lat},{lon}` | Timezone/country info for arbitrary coordinates (passthrough from the upstream). |
-| `GET` | `/api/distance/{lat},{lon}` | Slant-range distance from the supplied ground point to the ISS, in km. Uses the upstream's current altitude. |
+| `GET` | `/api/satellites` | Satellites the upstream knows about (just the ISS today). |
+| `GET` | `/api/satellite/{id?}` | Position, velocity, altitude, timestamp. Defaults to NORAD id 25544 (ISS). |
+| `GET` | `/api/coordinates/{lat},{lon}` | Timezone / country info for the supplied coordinates (passthrough). |
+| `GET` | `/api/distance/{lat},{lon}` | Slant-range distance from the supplied ground point to the ISS, in km. |
 
-Successful responses wrap data as `{"result": 1, "data": {...}}`. Invalid input
-returns **422** with an `errors` map; upstream failures return **502** with a
-`message`.
+### Response shape
+
+Successful calls wrap data in an envelope:
+
+```json
+{
+  "result": 1,
+  "data": { ... }
+}
+```
+
+Invalid input → **422** with an `errors` map:
+
+```json
+{ "result": 0, "errors": { "lat": ["The lat must be between -90 and 90."] } }
+```
+
+Upstream failure → **502**:
+
+```json
+{ "result": 0, "message": "..." }
+```
+
+### Examples
+
+```sh
+# Current ISS position
+curl http://127.0.0.1:8000/api/satellite
+
+# Distance from New York to the ISS (slant range, km)
+curl http://127.0.0.1:8000/api/distance/40.7128,-74.0060
+
+# Reject invalid coords (returns 422)
+curl -i http://127.0.0.1:8000/api/distance/999,999
+```
+
+`data.distance` is the **slant range** (line-of-sight 3D distance through space),
+not great-circle ground distance. It accounts for the ISS's actual altitude
+returned by the upstream (~408 km).
 
 ## Tests
 
@@ -57,8 +83,8 @@ php artisan test
 ```
 
 Unit tests cover the great-circle and slant-range math plus the coordinate
-validators. Feature tests exercise every route against `Http::fake()` so the
-suite never touches wheretheiss.at.
+validators. Feature tests exercise every route via `Http::fake()` so the suite
+never touches `api.wheretheiss.at`.
 
 ## History
 
