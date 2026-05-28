@@ -2,100 +2,86 @@
 
 namespace App\Http\Controllers;
 
-use App\Repositories\ISSGateway;
+use App\Repositories\ISSContract;
 use App\Traits\Measurable;
-use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\Validator;
 
 class IssController extends Controller
 {
     use Measurable;
 
-    protected $issRepository;
+    private const ISS_NORAD_ID = 25544;
 
-    public $issId = 25544;
+    public function __construct(
+        private readonly ISSContract $iss,
+    ) {
+    }
 
-    /**
-     * IssController constructor.
-     * @param $issRepository ISSGateway
-     */
-    public function __construct(ISSGateway $issRepository)
+    public function satellites(): JsonResponse
     {
-        $this->issRepository = $issRepository;
+        return response()->json($this->iss->getSatellites());
     }
 
-
-    public function satellites() {
-        $satellites = $this->issRepository->getSatellites();
-
-        return response()->json($satellites);
+    public function satelliteId(?int $id = null): JsonResponse
+    {
+        return response()->json($this->currentSatellite($id));
     }
 
-    public function satelliteId($id = null, Request $request = null) {
+    public function coordinates(float $lat, float $lon): JsonResponse
+    {
+        return response()->json($this->iss->getCoordinates($lat, $lon));
+    }
 
-        if($id == null) $id = $this->issId;
+    public function getDistance(string $lat, string $lon): JsonResponse
+    {
+        $validator = Validator::make(['lat' => $lat, 'lon' => $lon], [
+            'lat' => ['required', 'numeric', 'between:-90,90'],
+            'lon' => ['required', 'numeric', 'between:-180,180'],
+        ]);
 
-        $satellite = $this->issRepository->getSatelliteId($id);
-
-        if($request && $request->wantsJson()) {
-            return response()->json($satellite);
+        if ($validator->fails()) {
+            return response()->json([
+                'result' => 0,
+                'errors' => $validator->errors(),
+            ], 422);
         }
 
-        return $satellite;
-    }
+        $iss = $this->currentSatellite(null);
 
-    public function coordinates($lat, $lon) {
-        $coordinates = $this->issRepository->getCoordinates($lat, $lon);
-
-        return response()->json($coordinates);
-    }
-
-    public function calculateDistance(Request $request) {
-        $input = $request->all();
-        $error = ['result' => 0];
-
-        $latFrom = isset($input['lat']) ? $input['lat'] : null;
-        $lonFrom = isset($input['lon']) ? $input['lon'] : null;
-
-        if($latFrom && $lonFrom && $this->validateLatLong($latFrom, $lonFrom)) {
-
-            // Get the current coordinates of the ISS
-            $issInfo = $this->satelliteId();
-
-            if($issInfo['result'] == 1) {
-                $latTo = $issInfo['data']['latitude'];
-                $lonTo = $issInfo['data']['longitude'];
-                $distance = $this->geoDistance($latFrom, $lonFrom, $latTo, $lonTo);
-                return response()->json(['result' => 1, 'data' => ['distance' => $distance]]);
-            }
+        if (($iss['result'] ?? 0) !== 1) {
+            return response()->json([
+                'result' => 0,
+                'message' => $iss['message'] ?? 'Upstream ISS position unavailable.',
+            ], 502);
         }
 
-        return response()->json($error);
+        $distance = $this->slantRangeDistance(
+            (float) $lat,
+            (float) $lon,
+            (float) $iss['data']['latitude'],
+            (float) $iss['data']['longitude'],
+            (float) ($iss['data']['altitude'] ?? 408.0),
+        );
 
+        return response()->json([
+            'result' => 1,
+            'data' => [
+                'distance' => $distance,
+                'unit' => 'km',
+                'measurement' => 'slant_range',
+                'iss' => [
+                    'latitude' => $iss['data']['latitude'],
+                    'longitude' => $iss['data']['longitude'],
+                    'altitude' => $iss['data']['altitude'] ?? null,
+                ],
+            ],
+        ]);
     }
 
-    public function getDistance($lat, $lon) {
-        $error = ['result' => 0];
-
-        if($lat && $lon && $this->validateLatLong($lat, $lon)) {
-
-            // Get the current coordinates of the ISS
-            $issInfo = $this->satelliteId();
-
-            //dd($issInfo);
-
-            if($issInfo['result'] == 1) {
-                $latTo = $issInfo['data']['latitude'];
-                $lonTo = $issInfo['data']['longitude'];
-
-                //dd($lat, $lon, $latTo, $lonTo);
-
-                $distance = $this->geoDistance($lat, $lon, $latTo, $lonTo);
-                return response()->json(['result' => 1, 'data' => ['distance' => $distance]]);
-            }
-        }
-
-        return response()->json($error);
-
+    private function currentSatellite(?int $id): array
+    {
+        return $this->iss->getSatelliteId($id ?? self::ISS_NORAD_ID);
     }
-
 }

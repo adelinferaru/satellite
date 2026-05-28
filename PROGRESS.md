@@ -73,3 +73,14 @@ Three real bugs surfaced and fixed while writing the suite:
 5. **Removed dead code.** `IssController::calculateDistance(Request)` had no route binding (the legacy form-POST flow is gone with the frontend). Deleted.
 
 Test suite at end of Phase 6: **33 passing, 0 failing, 55 assertions.**
+
+## Phase 7 — Cutover ✅
+
+- Deleted legacy 5.7 files at root: `app/`, `bootstrap/`, `config/`, `database/`, `public/`, `resources/`, `routes/`, `composer.json`, `composer.lock`, `package.json`, `package-lock.json`, `artisan`, `phpunit.xml`, `server.php`, `webpack.mix.js`, plus `.editorconfig`, `.gitattributes`, `.env.example`.
+- Cleared root `storage/` and `tests/` (untracked legacy dirs), then moved the L12 equivalents up from `_next/`.
+- Moved the remaining `_next/` files (artisan, composer.json, composer.lock, phpunit.xml, .editorconfig, .gitattributes, .env.example) into root and removed `_next/` entirely.
+- Merged `.gitignore`: replaced with Laravel 12 default + the `.claude/settings.local.json` and `.claude/scheduled_tasks.lock` entries.
+- Re-ran `composer install` at root to regenerate `vendor/`. Re-pointed `.env` from the L12 template and `php artisan key:generate`.
+- Final test run at the new root: **33 passing, 0 failing, 55 assertions.**
+
+Updated `readme.md` (Laravel 12, PHP 8.2+, no npm) and rewrote `CLAUDE.md` for the single-tree state. Removed `_next/CLAUDE.md` (no longer needed).
