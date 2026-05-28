@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Repositories\ISSContract;
 use App\Traits\Measurable;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Validator;
 
@@ -27,6 +28,38 @@ class IssController extends Controller
     public function satelliteId(?int $id = null): JsonResponse
     {
         return response()->json($this->currentSatellite($id));
+    }
+
+    public function satellitePositions(int $id, Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'timestamps' => ['required', 'string', 'regex:/^\d+(,\d+){0,9}$/'],
+        ], [
+            'timestamps.regex' => 'timestamps must be 1-10 comma-separated Unix timestamps.',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'result' => 0,
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $timestamps = array_map(
+            'intval',
+            explode(',', (string) $request->input('timestamps')),
+        );
+
+        $result = $this->iss->getSatelliteIdPositions($id, $timestamps);
+
+        if (($result['result'] ?? 0) !== 1) {
+            return response()->json([
+                'result' => 0,
+                'message' => $result['message'] ?? 'Upstream positions unavailable.',
+            ], 502);
+        }
+
+        return response()->json($result);
     }
 
     public function coordinates(float $lat, float $lon): JsonResponse

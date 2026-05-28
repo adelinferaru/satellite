@@ -137,6 +137,51 @@ class IssEndpointsTest extends TestCase
             ->assertJsonPath('result', 0);
     }
 
+    public function test_positions_returns_upstream_payload(): void
+    {
+        Http::fake([
+            'api.wheretheiss.at/v1/satellites/25544/positions*' => Http::response([
+                ['timestamp' => 1672531200, 'latitude' => 1.0, 'longitude' => 2.0],
+                ['timestamp' => 1672531260, 'latitude' => 1.5, 'longitude' => 2.5],
+            ], 200),
+        ]);
+
+        $this->getJson('/api/satellite/25544/positions?timestamps=1672531200,1672531260')
+            ->assertOk()
+            ->assertJsonPath('result', 1)
+            ->assertJsonCount(2, 'data');
+    }
+
+    public function test_positions_rejects_missing_timestamps_with_422(): void
+    {
+        Http::fake();
+
+        $this->getJson('/api/satellite/25544/positions')
+            ->assertStatus(422)
+            ->assertJsonPath('result', 0)
+            ->assertJsonStructure(['errors' => ['timestamps']]);
+    }
+
+    public function test_positions_rejects_more_than_ten_timestamps_with_422(): void
+    {
+        Http::fake();
+
+        $eleven = implode(',', array_map(fn ($i) => (string) (1700000000 + $i), range(0, 10)));
+
+        $this->getJson("/api/satellite/25544/positions?timestamps={$eleven}")
+            ->assertStatus(422)
+            ->assertJsonPath('result', 0);
+    }
+
+    public function test_positions_rejects_non_numeric_timestamps_with_422(): void
+    {
+        Http::fake();
+
+        $this->getJson('/api/satellite/25544/positions?timestamps=now,then')
+            ->assertStatus(422)
+            ->assertJsonPath('result', 0);
+    }
+
     public function test_satellite_position_is_cached_for_one_second(): void
     {
         Http::fake([

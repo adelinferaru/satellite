@@ -1,5 +1,8 @@
 # Satellite — ISS API
 
+[![tests](https://github.com/adelinferaru/satellite/actions/workflows/tests.yml/badge.svg)](https://github.com/adelinferaru/satellite/actions/workflows/tests.yml)
+[![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 A Laravel 12 API that returns the current International Space Station position
 and computes the **slant-range distance** to it from any latitude/longitude.
 Wraps [api.wheretheiss.at](https://wheretheiss.at) with a 1-second response
@@ -33,6 +36,7 @@ Dev server at `http://127.0.0.1:8000`. Health check at `/up`.
 |---|---|---|
 | `GET` | `/api/satellites` | Satellites the upstream knows about (just the ISS today). |
 | `GET` | `/api/satellite/{id?}` | Position, velocity, altitude, timestamp. Defaults to NORAD id 25544 (ISS). |
+| `GET` | `/api/satellite/{id}/positions?timestamps=t1,t2,...` | Positions at 1–10 Unix timestamps (comma-separated). |
 | `GET` | `/api/coordinates/{lat},{lon}` | Timezone / country info for the supplied coordinates (passthrough). |
 | `GET` | `/api/distance/{lat},{lon}` | Slant-range distance from the supplied ground point to the ISS, in km. |
 
@@ -70,6 +74,9 @@ curl http://127.0.0.1:8000/api/distance/40.7128,-74.0060
 
 # Reject invalid coords (returns 422)
 curl -i http://127.0.0.1:8000/api/distance/999,999
+
+# ISS positions at three given Unix timestamps
+curl "http://127.0.0.1:8000/api/satellite/25544/positions?timestamps=1672531200,1672531260,1672531320"
 ```
 
 `data.distance` is the **slant range** (line-of-sight 3D distance through space),
@@ -91,6 +98,10 @@ never touches `api.wheretheiss.at`.
 Originally written on Laravel 5.7 with a Vue 2 + Bootstrap 4 frontend, then
 rewritten onto Laravel 12 as a pure API. See `UPGRADE.md` for the staged plan
 and `PROGRESS.md` for the decision log from the rewrite.
+
+## License
+
+[MIT](LICENSE)
 
 ## Author
 
