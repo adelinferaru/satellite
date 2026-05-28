@@ -1,0 +1,14 @@
+{
+    "hooks": {
+        "Notification": [
+            {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "curl -s -d \"Claude needs your input\" https://ntfy.sh/aluisaway"
+                    }
+                ]
+            }
+        ]
+    }
+}
