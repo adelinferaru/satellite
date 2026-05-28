@@ -2,6 +2,7 @@
 
 namespace App\Repositories;
 
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Throwable;
 
@@ -22,7 +23,13 @@ class ISSGateway implements ISSContract
 
     public function getSatelliteId(int $id = 25544): array
     {
-        return $this->call("satellites/{$id}");
+        // 1-second cache. wheretheiss.at rate-limits at 350 req / 5 minutes;
+        // a position fix is also only meaningful for ~1s anyway.
+        return Cache::remember(
+            "iss.satellite.{$id}",
+            now()->addSecond(),
+            fn () => $this->call("satellites/{$id}"),
+        );
     }
 
     public function getSatelliteIdPositions(int $id, array $timestamps = []): array

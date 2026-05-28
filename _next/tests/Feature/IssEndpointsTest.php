@@ -85,39 +85,75 @@ class IssEndpointsTest extends TestCase
             ->assertJsonPath('data.timezone_id', 'America/New_York');
     }
 
-    public function test_distance_computes_against_current_iss_position(): void
+    public function test_distance_computes_slant_range_using_iss_altitude(): void
     {
         Http::fake([
             'api.wheretheiss.at/v1/satellites/25544' => Http::response([
                 'latitude' => 0.0,
                 'longitude' => 0.0,
-                'altitude' => 408.0,
+                'altitude' => 408.5,
             ], 200),
         ]);
 
         $response = $this->getJson('/api/distance/0.0,0.0');
 
-        $response->assertOk()->assertJsonPath('result', 1);
-        $this->assertEqualsWithDelta(0.0, $response->json('data.distance'), 0.001);
+        $response->assertOk()
+            ->assertJsonPath('result', 1)
+            ->assertJsonPath('data.unit', 'km')
+            ->assertJsonPath('data.measurement', 'slant_range')
+            ->assertJsonPath('data.iss.altitude', 408.5);
+
+        // Ground point directly under the ISS: slant range == altitude.
+        $this->assertEqualsWithDelta(408.5, $response->json('data.distance'), 0.001);
     }
 
-    public function test_distance_rejects_invalid_coordinates(): void
+    public function test_distance_rejects_invalid_coordinates_with_422(): void
     {
         Http::fake();
 
         $this->getJson('/api/distance/999,999')
-            ->assertOk()
-            ->assertExactJson(['result' => 0]);
+            ->assertStatus(422)
+            ->assertJsonPath('result', 0)
+            ->assertJsonStructure(['errors' => ['lat', 'lon']]);
     }
 
-    public function test_distance_returns_failure_when_upstream_unreachable(): void
+    public function test_distance_rejects_non_numeric_coordinates(): void
+    {
+        Http::fake();
+
+        $this->getJson('/api/distance/abc,xyz')
+            ->assertStatus(422)
+            ->assertJsonPath('result', 0);
+    }
+
+    public function test_distance_returns_502_when_upstream_unreachable(): void
     {
         Http::fake([
             'api.wheretheiss.at/v1/satellites/25544' => Http::response(null, 500),
         ]);
 
         $this->getJson('/api/distance/40.7128,-74.006')
-            ->assertOk()
-            ->assertExactJson(['result' => 0]);
+            ->assertStatus(502)
+            ->assertJsonPath('result', 0);
+    }
+
+    public function test_satellite_position_is_cached_for_one_second(): void
+    {
+        Http::fake([
+            'api.wheretheiss.at/v1/satellites/25544' => Http::response([
+                'name' => 'iss',
+                'id' => 25544,
+                'latitude' => 1.0,
+                'longitude' => 2.0,
+                'altitude' => 408.0,
+            ], 200),
+        ]);
+
+        $this->getJson('/api/satellite')->assertOk();
+        $this->getJson('/api/satellite')->assertOk();
+        $this->getJson('/api/satellite')->assertOk();
+
+        // 3 client calls, 1 upstream call (cached).
+        Http::assertSentCount(1);
     }
 }

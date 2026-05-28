@@ -38,6 +38,26 @@ class MeasurableTest extends TestCase
         $this->assertEqualsWithDelta(5538.0, $km, 30.0);
     }
 
+    public function test_slant_range_directly_overhead_equals_altitude(): void
+    {
+        // Ground point at the satellite's nadir: slant range == altitude.
+        $km = $this->subject->slantRangeDistance(0.0, 0.0, 0.0, 0.0, 408.0);
+        $this->assertEqualsWithDelta(408.0, $km, 0.001);
+    }
+
+    public function test_slant_range_grows_monotonically_with_separation(): void
+    {
+        $overhead = $this->subject->slantRangeDistance(0.0, 0.0, 0.0, 0.0, 408.0);
+        $near = $this->subject->slantRangeDistance(0.0, 0.0, 0.0, 10.0, 408.0);
+        $far = $this->subject->slantRangeDistance(0.0, 0.0, 0.0, 60.0, 408.0);
+
+        $this->assertLessThan($near, $overhead);
+        $this->assertLessThan($far, $near);
+        // Sanity: horizon-ish slant range is always less than line-of-sight
+        // through the satellite's orbital radius diameter.
+        $this->assertLessThan(2 * (6371.0 + 408.0), $far);
+    }
+
     public function test_geo_distance_is_symmetric(): void
     {
         $a = $this->subject->geoDistance(40.6413, -73.7781, 51.4700, -0.4543);

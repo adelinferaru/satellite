@@ -38,8 +38,38 @@ Not blocking. Documenting and moving on.
 
 User chose API-only build during Phase 1 decisions. The legacy Blade view and Vue components are not being ported. Webpack/Mix toolchain not migrated to Vite.
 
-## Phase 4 — Dependency refresh — N/A for the rewrite path
+## Phase 4 — Dependency refresh — N/A for the rewrite path ✅
 
 The phase was written assuming an incremental in-place upgrade. Because we scaffolded a fresh L12 project, `_next/composer.json` already ships with the correct, modern dep set: no `fideloper/proxy`, no `beyondcode/laravel-dump-server`, no `fzaninotto/faker`, no `laravel-mix`, no jquery/popper. Nothing to refresh.
 
 The one library decision was about `guzzlehttp/guzzle` — handled in Phase 2 by switching to `Http::`.
+
+Left in place from the L12 scaffold:
+- `laravel/sail` (Docker dev env) — unused on this Laragon-based dev box but harmless dev-only dep.
+- `laravel/pail` (real-time log tail) — lightweight, kept.
+- The composer `dev` script references `npm run dev` and `php artisan pail`; on this API-only build with no npm, running `composer dev` would fail. Not fixing now — `php artisan serve` is the canonical dev command and that works.
+
+## Phase 5 — Tests ✅
+
+Unit (`MeasurableTest`): `geoDistance` (identical points, NYC↔London ~5538km, symmetry), `slantRangeDistance` (overhead = altitude, monotonic with separation), and lat/long regex validators (boundary cases ±90, ±180, malformed).
+
+Feature (`IssEndpointsTest`): all four endpoints exercised via `Http::fake()` and `Http::preventStrayRequests()` so the upstream is never touched. Covers default NORAD id, explicit id, 502 on upstream failure, 422 on invalid input, slant-range math, and the 1-second cache (3 client hits → 1 upstream hit).
+
+Three real bugs surfaced and fixed while writing the suite:
+- **`geoDistance` returned NaN for identical points.** `sin²+cos²` can overshoot 1.0 by a float ulp, sending `acos` into NaN territory. Added a clamp.
+- **Zero coordinates rejected as missing.** Legacy guard was `! $lat || ! $lon`, which treats `0.0` as falsy. Replaced with explicit `null` check (and later, with the new numeric validator).
+- **`validateLatLong` regex breaks on native floats.** PHP stringifies `0.0` as `"0"`, so the dotted-decimal regex fails. Added `isValidCoordinate(mixed, mixed)` in `Measurable` doing a proper numeric-range check; the regex helpers are retained for legacy string callers and remain covered by tests.
+
+## Phase 6 — Behavior fixes ✅
+
+1. **Altitude-aware distance.** Added `Measurable::slantRangeDistance($latFrom, $lonFrom, $latTo, $lonTo, $altKm)` using the law of cosines on the Earth-center / observer / satellite triangle. `IssController::getDistance` now uses it with the upstream's actual `altitude` field, falling back to 408 km if absent. Response now includes `data.measurement = "slant_range"` and an `iss` block (lat/lon/altitude) so clients can verify what was computed against.
+
+2. **Validation via Laravel's validator.** Path params for `getDistance` are now `string` (deferring numeric parsing), validated with `required|numeric|between:-90,90` / `between:-180,180`. Invalid input returns **422** with an `errors` map instead of `{result:0}`. Upstream failures return **502** with a `message`. The plan called for FormRequest specifically — chose inline `Validator::make` because the action takes path params, not form/query input, which is the typical FormRequest territory.
+
+3. **Caching.** `ISSGateway::getSatelliteId` now wraps the upstream call in `Cache::remember(..., now()->addSecond(), ...)`. Keyed by NORAD id. Verified via a feature test that asserts 3 controller hits → 1 upstream hit.
+
+4. **`getSatelliteIdPositions`** — already implemented in the Phase 2 port (`call("satellites/{id}/positions", ['timestamps' => ...])`). Not re-touched.
+
+5. **Removed dead code.** `IssController::calculateDistance(Request)` had no route binding (the legacy form-POST flow is gone with the frontend). Deleted.
+
+Test suite at end of Phase 6: **33 passing, 0 failing, 55 assertions.**
