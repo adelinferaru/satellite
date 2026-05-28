@@ -36,10 +36,10 @@ class IssController extends Controller
 
     public function calculateDistance(Request $request): JsonResponse
     {
-        $latFrom = $request->input('lat');
-        $lonFrom = $request->input('lon');
-
-        return $this->distanceResponse($latFrom, $lonFrom);
+        return $this->distanceResponse(
+            $request->input('lat'),
+            $request->input('lon'),
+        );
     }
 
     public function getDistance(float $lat, float $lon): JsonResponse
@@ -54,7 +54,7 @@ class IssController extends Controller
 
     private function distanceResponse(mixed $lat, mixed $lon): JsonResponse
     {
-        if (! $lat || ! $lon || ! $this->validateLatLong($lat, $lon)) {
+        if (! $this->isValidCoordinate($lat, $lon)) {
             return response()->json(['result' => 0]);
         }
 
