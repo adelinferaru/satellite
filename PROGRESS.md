@@ -84,3 +84,36 @@ Test suite at end of Phase 6: **33 passing, 0 failing, 55 assertions.**
 - Final test run at the new root: **33 passing, 0 failing, 55 assertions.**
 
 Updated `readme.md` (Laravel 12, PHP 8.2+, no npm) and rewrote `CLAUDE.md` for the single-tree state. Removed `_next/CLAUDE.md` (no longer needed).
+
+## Post-roadmap follow-ups
+
+The original `UPGRADE.md` only covered the rewrite itself. After Phase 7 shipped to `master` (PR #1, merged), three additional items landed on top:
+
+### Repo hygiene
+
+- **`LICENSE`** added at the root (MIT). `composer.json` had declared MIT since the original 5.7 commit but no actual license file existed. Linked from `readme.md`.
+- **GitHub repo description** rewritten from the stale 5.7 blurb to: *"Laravel 12 API that returns the current International Space Station position and computes slant-range distance to it from any lat/lon. Wraps api.wheretheiss.at with a 1-second cache."*
+- **Topics** added: `laravel`, `laravel-12`, `php`, `php8`, `api`, `rest-api`, `iss`, `international-space-station`, `satellite-tracking`, `space`.
+- **`readme.md`** sharpened with CI/license badges, example curl invocations, and explicit response-shape JSON snippets (success envelope, 422 error, 502 upstream failure). Calls out that `data.distance` is slant range, not ground track.
+
+### CI
+
+`.github/workflows/tests.yml` runs `php artisan test` on PHP 8.2 and 8.3 for every push to `master` and every PR. Composer cache keyed on `composer.lock`. First run green on commit `a4bc8f0`.
+
+The initial push was rejected because the `gh`-issued OAuth token had no `workflow` scope. Resolved by running `gh auth refresh -s workflow` in a non-Claude-Code terminal — `gh` requires an interactive device-code flow that the `!`-prefixed in-session shell does not provide.
+
+### `/api/satellite/{id}/positions` endpoint
+
+The `ISSGateway::getSatelliteIdPositions($id, $timestamps)` method was implemented in Phase 2 but had no public route. Filling that in:
+
+- New route `GET /api/satellite/{id}/positions?timestamps=t1,t2,...` (named `satellite.positions`).
+- New controller action `IssController::satellitePositions(int $id, Request $request)`.
+- Validation via `Validator::make` (consistent with `getDistance`): `timestamps` is a `required|string|regex:/^\d+(,\d+){0,9}$/` — 1 to 10 comma-separated unsigned ints. The 10-cap matches the upstream API's limit.
+- Failures: 422 on bad/missing/oversized input, 502 when the upstream returns a failure envelope, otherwise pass-through.
+- Four new feature tests in `IssEndpointsTest` covering happy path + the three failure modes.
+
+Final suite: **37 passing, 66 assertions** (was 33 at end of Phase 7).
+
+### Lost-and-found
+
+While running tests after the cutover, the local `.env` was missing — it must have been swept up by the `_next/` cleanup. Regenerated via `cp .env.example .env && php artisan key:generate`. The test suite passed either way because `phpunit.xml` provides all needed env vars, but it threw 14 warnings about the missing file. Mentioned here in case future cutover work hits the same artifact.
