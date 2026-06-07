@@ -38,6 +38,13 @@ class MeasurableTest extends TestCase
         $this->assertEqualsWithDelta(5538.0, $km, 30.0);
     }
 
+    public function test_geo_distance_is_symmetric(): void
+    {
+        $a = $this->subject->geoDistance(40.6413, -73.7781, 51.4700, -0.4543);
+        $b = $this->subject->geoDistance(51.4700, -0.4543, 40.6413, -73.7781);
+        $this->assertEqualsWithDelta($a, $b, 1e-6);
+    }
+
     public function test_slant_range_directly_overhead_equals_altitude(): void
     {
         // Ground point at the satellite's nadir: slant range == altitude.
@@ -53,81 +60,46 @@ class MeasurableTest extends TestCase
 
         $this->assertLessThan($near, $overhead);
         $this->assertLessThan($far, $near);
-        // Sanity: horizon-ish slant range is always less than line-of-sight
-        // through the satellite's orbital radius diameter.
+        // Sanity: slant range stays under line-of-sight through the orbital
+        // diameter even at long horizon separations.
         $this->assertLessThan(2 * (6371.0 + 408.0), $far);
     }
 
-    public function test_geo_distance_is_symmetric(): void
+    #[DataProvider('validCoordinates')]
+    public function test_is_valid_coordinate_accepts_valid(mixed $lat, mixed $lon): void
     {
-        $a = $this->subject->geoDistance(40.6413, -73.7781, 51.4700, -0.4543);
-        $b = $this->subject->geoDistance(51.4700, -0.4543, 40.6413, -73.7781);
-        $this->assertEqualsWithDelta($a, $b, 1e-6);
+        $this->assertTrue($this->subject->isValidCoordinate($lat, $lon));
     }
 
-    #[DataProvider('validLatitudes')]
-    public function test_validate_latitude_accepts_valid(string|float $lat): void
-    {
-        $this->assertTrue($this->subject->validateLatitude($lat));
-    }
-
-    public static function validLatitudes(): array
+    public static function validCoordinates(): array
     {
         return [
-            'zero' => [0],
-            'positive int' => [45],
-            'negative decimal' => [-45.5],
-            'max positive' => [90],
-            'max negative' => [-90],
+            'origin' => [0.0, 0.0],
+            'positive' => [45, 120],
+            'negative decimals' => [-45.5, -73.99],
+            'max positive bounds' => [90, 180],
+            'max negative bounds' => [-90, -180],
+            'numeric strings' => ['40.7', '-74.0'],
         ];
     }
 
-    #[DataProvider('invalidLatitudes')]
-    public function test_validate_latitude_rejects_invalid(mixed $lat): void
+    #[DataProvider('invalidCoordinates')]
+    public function test_is_valid_coordinate_rejects_invalid(mixed $lat, mixed $lon): void
     {
-        $this->assertFalse($this->subject->validateLatitude($lat));
+        $this->assertFalse($this->subject->isValidCoordinate($lat, $lon));
     }
 
-    public static function invalidLatitudes(): array
+    public static function invalidCoordinates(): array
     {
         return [
-            'over 90' => [90.5],
-            'under -90' => [-90.5],
-            'far over' => [180],
-            'non-numeric' => ['abc'],
-        ];
-    }
-
-    #[DataProvider('validLongitudes')]
-    public function test_validate_longitude_accepts_valid(string|float $lon): void
-    {
-        $this->assertTrue($this->subject->validateLongitude($lon));
-    }
-
-    public static function validLongitudes(): array
-    {
-        return [
-            'zero' => [0],
-            'positive int' => [120],
-            'negative decimal' => [-73.99],
-            'max positive' => [180],
-            'max negative' => [-180],
-        ];
-    }
-
-    #[DataProvider('invalidLongitudes')]
-    public function test_validate_longitude_rejects_invalid(mixed $lon): void
-    {
-        $this->assertFalse($this->subject->validateLongitude($lon));
-    }
-
-    public static function invalidLongitudes(): array
-    {
-        return [
-            'over 180' => [180.5],
-            'under -180' => [-180.5],
-            'way over' => [360],
-            'non-numeric' => ['xyz'],
+            'lat too high' => [90.5, 0.0],
+            'lat too low' => [-90.5, 0.0],
+            'lon too high' => [0.0, 180.5],
+            'lon too low' => [0.0, -180.5],
+            'lat non-numeric' => ['abc', 0.0],
+            'lon non-numeric' => [0.0, 'xyz'],
+            'null lat' => [null, 0.0],
+            'null lon' => [0.0, null],
         ];
     }
 }

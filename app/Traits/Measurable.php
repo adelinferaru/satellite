@@ -42,34 +42,6 @@ trait Measurable
         );
     }
 
-    public function validateLatitude(float|int|string $lat): bool
-    {
-        return (bool) preg_match(
-            '/^(\+|-)?(?:90(?:(?:\.0{1,6})?)|(?:[0-9]|[1-8][0-9])(?:(?:\.[0-9]{1,6})?))$/',
-            (string) $lat,
-        );
-    }
-
-    public function validateLongitude(float|int|string $long): bool
-    {
-        return (bool) preg_match(
-            '/^(\+|-)?(?:180(?:(?:\.0{1,6})?)|(?:[0-9]|[1-9][0-9]|1[0-7][0-9])(?:(?:\.[0-9]{1,6})?))$/',
-            (string) $long,
-        );
-    }
-
-    public function validateLatLong(float|int|string $lat, float|int|string $long): bool
-    {
-        return (bool) preg_match(
-            '/^[-]?(([0-8]?[0-9])\.(\d+))|(90(\.0+)?),[-]?((((1[0-7][0-9])|([0-9]?[0-9]))\.(\d+))|180(\.0+)?)$/',
-            $lat . ',' . $long,
-        );
-    }
-
-    /**
-     * Numeric-range coordinate check. More robust than the regex validators
-     * for native float inputs (avoids "0.0" -> "0" stringification artifacts).
-     */
     public function isValidCoordinate(mixed $lat, mixed $lon): bool
     {
         if (! is_numeric($lat) || ! is_numeric($lon)) {
