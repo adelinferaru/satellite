@@ -25,11 +25,26 @@ class ISSGateway implements ISSContract
     {
         // 1-second cache. wheretheiss.at rate-limits at 350 req / 5 minutes;
         // a position fix is also only meaningful for ~1s anyway.
-        return Cache::remember(
-            "iss.satellite.{$id}",
-            now()->addSecond(),
-            fn () => $this->call("satellites/{$id}"),
-        );
+        //
+        // Use a *relative* integer TTL — evaluated when the value is stored, after
+        // the upstream call returns. An absolute now()->addSecond() expiry computed
+        // up front is already in the past by write time whenever the call takes
+        // longer than the TTL, so the entry is written pre-expired and never hits.
+        // Cache only successful fixes, so a transient upstream failure isn't served
+        // stale.
+        $key = "iss.satellite.{$id}";
+
+        if (($cached = Cache::get($key)) !== null) {
+            return $cached;
+        }
+
+        $result = $this->call("satellites/{$id}");
+
+        if (($result['result'] ?? 0) === 1) {
+            Cache::put($key, $result, 1);
+        }
+
+        return $result;
     }
 
     public function getSatelliteIdPositions(int $id, array $timestamps = []): array
